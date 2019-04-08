@@ -1,6 +1,14 @@
 
+func! HsAPIExplore#start()
+  echo 'HsAPIExplore#start'
+endfunc
 
 " UTILS: --------------------------------------------------------------
+
+
+
+" ─    Utils                                          ──
+
 
 func! FlipListList ( listList )
   let flippedList = []
@@ -34,14 +42,14 @@ command! -range -nargs=1 ReplaceStringsInRange :<line1>,<line2>call ReplaceStrin
     " copy motion below paragraph
 " ====
 
-" Operator And Movement:{{{
+" Operator And Movement: {{{
 " Operator pending map: to fill in the movement after an operator key has been pressed
 " - If your operator-pending mapping ends with some text visually selected, Vim will operate on that text.
 " - Otherwise, Vim will operate on the text between the original cursor position and the new position.
 " Search to the prev ===..= regex, then at the line above set a visual highlight to the end of the line
-noremap ih :<c-u>execute "normal! ?^==\\+$\r:nohlsearch\rkvg_"<cr>
+onoremap ih :<c-u>execute "normal! ?^==\\+$\r:nohlsearch\rkvg_"<cr>
 " Find vimcommentTitle then visualselect till end of the line
-noremap ih :<c-u>execute "normal! ?^.*:$\rv$"<cr>
+onoremap ih :<c-u>execute "normal! ?^.*:\rv$"<cr>
 " Exec will substitute special characters before running. \r means "carriage return". The double backslash puts a literal backslash in the string.
 " call append( 39, '**')
 " exe sl.','.el 's/\%'.sc.'c\|\%'.ec.'c.\zs/\=s/g|norm!``'
@@ -65,10 +73,13 @@ noremap ih :<c-u>execute "normal! ?^.*:$\rv$"<cr>
 " exec "normal! gg" . '/\vfor .\+ in .\+:' . "\<cr>"
 " }}}
 
-nnoremap <silent> <leader>at :set opfunc=ReplaceLastPattern<cr>g@
-vnoremap <silent> <leader>at :<c-u>call ReplaceLastPattern(visualmode(), 1)<cr>
+" Operator Map: The operator key map "\r" should be followed by a motion (e.g. W, $ or 'a) or textobject "af/ip/ ..".
+" It's a function that operates on a range of text from a motion, textobj or vis-selection. It then transforms that text or does some other side effect.
+nnoremap <silent> <localleader>r :set opfunc=ReplaceLastPattern<cr>g@
+vnoremap <silent> <localleader>r :<c-u>call ReplaceLastPattern(visualmode(), 1)<cr>
 
 func! ReplaceLastPattern( motionType, ...)
+  normal! m'
   let lastPattern = histget( 'search', -1 )
   let replacementText = input('Enter replacement text: ')
   let linesRangeMarkersStr = a:0 ? "'<,'>" : "'[,']"
@@ -82,7 +93,10 @@ func! ReplaceLastPattern( motionType, ...)
   endif
   let substCmdAccum .= lastPattern . "/" . replacementText . "/ge"
   call ExecKeepView( substCmdAccum )
-  " Notes:{{{
+  " exec substCmdAccum
+  " exec 'normal!' "\<C-o>"
+  call JumpBackSkipCurrentLoc()
+  " Notes: {{{
   " call ExecKeepView( "'[,']s/\\%>15c/_/ge|norm!``" )
   " let debugStr = startLine . ' ' . endLine . ' ' . startColumn . ' ' . endColumn
   " let insertChar = nr2char( getchar() )
@@ -93,29 +107,30 @@ func! ReplaceLastPattern( motionType, ...)
   " if a:motionType == 'line' || a:motionType == 'V'
   " elseif a:motionType == 'block' || a:motionType == "\<c-v>"}}}
 endfunc
+" Todo: make the function more reusable by making it a "ReplacePattern" that takes a pattern or else uses the last search{{{
 " Regex Demo: run next line then put cursor on 'aa' in next line, them opfunction = $ motion
+" add something to the searchhistory for demonstartion purposes
 " call histadd( 'search', '[ew]\s' )
+" then  | here do "\r$"
 " xx ww aa at cc ee ax ww ll aa xx
-" xx ww aa at cc ee ax ww ll aa xx
+" xx ww aa at cc ee ax ww ll aa xx}}}
 
-
-" Make sure the cursor position and view does not change when running the ex-command
+" Make sure the cursor position and view does not change when running the ex-command{{{
 func! ExecKeepView(arg)
   let l:winview = winsaveview()
   exec a:arg
   call winrestview(l:winview)
-endfunc
+endfunc "}}}
 
-
-func! MakeBufferDisposable()
+func! MakeBufferDisposable() "{{{
   setl buftype=nofile
   setl bufhidden=hide
   setl noswapfile
   " Buffer is shown with ':ls' but not ctrlP
   setl buflisted
-endfunc
+endfunc "}}}
 
-" Like <cword> but includes Haskell symbol characters
+" Like <cword> but includes Haskell symbol characters{{{
 func! HsCursorKeyword()
   let isk = &l:isk
   " Tempoarily extend the isKeyword character range
@@ -123,9 +138,9 @@ func! HsCursorKeyword()
   let keyword = expand("<cword>")
   let &l:isk = isk
   return keyword
-endfunc
+endfunc "}}}
 
-" Get the type signature from line
+" Get the type signature from line{{{
 func! HsExtractTypeFromLine( lineNr )
   let line  = getline( a:lineNr )
   let pattern = '\v^.*(∷|:)\ze'
@@ -134,30 +149,31 @@ endfunc
 " Control.Monad replicateM :: (Applicative m) => Int -> m a -> m [a]
 " echo HsExtractTypeFromLine( line('.')-1 )
 " Control.Monad replicateM ∷ (Applicative m) => Int -> m a -> m [a]
-" echo HsExtractTypeFromLine( line('.')-1 )
+" echo HsExtractTypeFromLine( line('.')-1 )}}}
 
-func! PreserveKleisliInUnicodeReplace( listListMap )
+func! PreserveKleisliInUnicodeReplace( listListMap ) "{{{
   call insert( a:listListMap, ['>=>', '>#>'] )
   call add   ( a:listListMap, ['>#>', '>=>'] )
   return a:listListMap
 endfunc
-" echo PreserveKleisliInUnicodeReplace( [['=>', '⇒'], ['c', 'd']] )
+" echo PreserveKleisliInUnicodeReplace( [['=>', '⇒'], ['c', 'd']] )}}}
 
-func! RequireSpaceBeforeOperatorChars( listListMap )
+" Require Space Before Operator Chars
+func! ExtendOperatorPattern( listListMap )
   let augmentedListList = []
   for [fst, snd] in a:listListMap
     call add( augmentedListList, [ '\s\zs' . fst, snd ] )
   endfor
   return augmentedListList
 endfunc
-" echo RequireSpaceBeforeOperatorChars( [['aa', 'bb'], ['=>', '⇒']] )
+" echo ExtendOperatorPattern( [['aa', 'bb'], ['=>', '⇒']] )
 
 let g:ScratchBuffername = 'HsAPIExplore'
 
 let g:HsReplacemMap_CharsToUnicode = [['->', '→'], ['=>', '⇒'], ['::', '∷'], ['forall', '∀'], ["<-", "←"]]
 let g:HsReplacemMap_UnicodeToChars = FlipListList( g:HsReplacemMap_CharsToUnicode )
 
-command! -range=% HsReplaceCharsToUnicode :<line1>,<line2>call ReplaceStringsInRange( RequireSpaceBeforeOperatorChars( g:HsReplacemMap_CharsToUnicode ) )
+command! -range=% HsReplaceCharsToUnicode :<line1>,<line2>call ReplaceStringsInRange( ExtendOperatorPattern( g:HsReplacemMap_CharsToUnicode ) )
 command! -range=% HsReplaceUnicodeToChars :<line1>,<line2>call ReplaceStringsInRange( g:HsReplacemMap_UnicodeToChars )
 " .+3HsReplaceCharsToUnicode
 " .,+6HsReplaceCharsToUnicode
@@ -167,7 +183,7 @@ command! -range=% HsReplaceUnicodeToChars :<line1>,<line2>call ReplaceStringsInR
 " kleisli :: forall e. Example e >=> Line
 " kleisli = do aa <- example
 
-" UTILS: --------------------------------------------------------------
+" ─ Utils
 
 
 func! HsReplaceCharsWithUnicode( str )
@@ -175,6 +191,7 @@ func! HsReplaceCharsWithUnicode( str )
   return str1
 endfunc
 
+" UTILS: --------------------------------------------------------------
 
 
 " fun! HoogleForVisSel()
